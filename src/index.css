@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --color-brand-primary: #2563EB;
+    --color-brand-sidebar: #123B80;
+    --color-canvas: #F1F5F9;
+    --color-surface: #FFFFFF;
+    --color-ink: #0F172A;
+    --color-muted: #64748B;
+    --color-hairline: #E2E8F0;
+  }
+
+  .dark {
+    --color-canvas: #0B1120;
+    --color-surface: #111827;
+    --color-ink: #F8FAFC;
+    --color-muted: #94A3B8;
+    --color-hairline: #1E293B;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45);
+}
+
+@media print {
+  aside,
+  header,
+  nav[aria-label="Điều hướng di động"],
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-document {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}

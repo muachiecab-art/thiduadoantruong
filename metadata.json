@@ -1,0 +1,8 @@
+{
+  "name": "SMART CLASSBOOK AI – Trường THPT Chu Văn An",
+  "description": "Số hóa mỗi tiết học – Thông minh hóa công tác thi đua. Hệ thống Sổ đầu bài trực tuyến và quản lý thi đua trường THPT Chu Văn An.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

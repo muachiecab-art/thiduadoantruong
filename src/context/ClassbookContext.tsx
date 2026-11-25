@@ -145,6 +145,9 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const [loggedOutManually, setLoggedOutManually] = useState(false);
   const isDemoSessionRef = useRef(true);
+  const hasInitializedFiltersRef = useRef(false);
+  const warnedStorageRef = useRef(false);
+  const lastSyncAtRef = useRef(0);
   const [dataset, setDataset] = useState<AppDataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -205,12 +208,13 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
       const execute = async (bearerToken: string | null) => {
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
           ...((options.headers as Record<string, string>) || {}),
         };
         if (bearerToken) {
           headers.Authorization = `Bearer ${bearerToken}`;
         }
-        return fetch(url, { ...options, headers });
+        return fetch(url, { cache: 'no-store', ...options, headers });
       };
 
       let res = await execute(overrideToken ?? tokenRef.current);
@@ -224,7 +228,8 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
       ) {
         const refreshRes = await fetch('/api/auth/demo-session', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
           body: JSON.stringify({ role: user.role }),
         });
         if (refreshRes.ok) {
@@ -250,13 +255,17 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
   );
 
   const applyDataset = useCallback((data: AppDataset) => {
+    lastSyncAtRef.current = Date.now();
     setDataset(data);
-    setGlobalFilters((prev) => ({
-      ...prev,
-      schoolYear: data.settings.currentSchoolYear,
-      semester: data.settings.currentSemester,
-      week: data.settings.currentWeek,
-    }));
+    if (!hasInitializedFiltersRef.current) {
+      hasInitializedFiltersRef.current = true;
+      setGlobalFilters((prev) => ({
+        ...prev,
+        schoolYear: data.settings.currentSchoolYear,
+        semester: data.settings.currentSemester,
+        week: data.settings.currentWeek,
+      }));
+    }
   }, []);
 
   const loadDatasetWithToken = useCallback(
@@ -274,13 +283,15 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch('/api/auth/demo-session', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
           body: JSON.stringify({ role }),
         });
         const data = await parseJsonSafe<{
           token?: string;
           user?: UserAccount;
           dataset?: AppDataset;
+          storageMode?: string;
         }>(res);
         if (!res.ok || !data.token || !data.user) {
           throw new Error(
@@ -296,6 +307,16 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
         } else {
           await loadDatasetWithToken(data.token);
         }
+        if (
+          data.storageMode === 'unconfigured-serverless' &&
+          !warnedStorageRef.current
+        ) {
+          warnedStorageRef.current = true;
+          notify(
+            'error',
+            'Vercel chưa cấu hình SUPABASE_URL và SUPABASE_SERVICE_ROLE_KEY nên thao tác lưu sẽ bị từ chối.'
+          );
+        }
         const allowed = ROLE_ALLOWED_PAGES[data.user.role as UserRole];
         setActivePageState((prev) =>
           allowed.includes(prev) ? prev : 'dashboard'
@@ -306,7 +327,7 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     },
-    [applyDataset, loadDatasetWithToken, setToken]
+    [applyDataset, loadDatasetWithToken, notify, setToken]
   );
 
   useEffect(() => {
@@ -383,6 +404,30 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
     if (!active) return;
     await loadDatasetWithToken(active);
   }, [loadDatasetWithToken]);
+
+  // Background cross-device sync (on tab focus/visibility and every 20s)
+  useEffect(() => {
+    if (!token || loggedOutManually) return;
+    const syncIfNeeded = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastSyncAtRef.current < 4000) return;
+      refreshDataset().catch(() => {
+        // Silent background sync retry on next cycle
+      });
+    };
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshDataset().catch(() => {});
+      }
+    }, 20000);
+    window.addEventListener('focus', syncIfNeeded);
+    document.addEventListener('visibilitychange', syncIfNeeded);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', syncIfNeeded);
+      document.removeEventListener('visibilitychange', syncIfNeeded);
+    };
+  }, [token, loggedOutManually, refreshDataset]);
 
   const createLesson = useCallback(
     async (payload: Partial<ClassLesson>) => {

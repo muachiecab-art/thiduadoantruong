@@ -63,7 +63,19 @@ export function AiAssistantPage() {
           week: globalFilters.week,
         }),
       });
-      const data = await res.json();
+      const rawText = await res.text().catch(() => '');
+      let data: {
+        reply?: string;
+        error?: string;
+        verifiedContext?: { rankingsTopAndAll?: RankingSnapshotRow[] };
+      } = {};
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = {};
+        }
+      }
       const snapshotTable: RankingSnapshotRow[] | undefined =
         data?.verifiedContext?.rankingsTopAndAll;
 
@@ -85,7 +97,7 @@ export function AiAssistantPage() {
           {
             id: `ai-${Date.now()}`,
             role: 'assistant',
-            text: data.reply,
+            text: data.reply || 'Không nhận được phản hồi từ Trợ lý AI.',
             tableData: snapshotTable,
           },
         ]);

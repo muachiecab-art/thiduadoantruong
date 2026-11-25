@@ -182,8 +182,26 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const parseJsonSafe = async <T = Record<string, unknown>>(
+    res: Response
+  ): Promise<T & { error?: string }> => {
+    const text = await res.text().catch(() => '');
+    if (!text) return {} as T & { error?: string };
+    try {
+      return JSON.parse(text) as T & { error?: string };
+    } catch {
+      return {
+        error: `Máy chủ API chưa phản hồi đúng định dạng JSON (HTTP ${res.status}).`,
+      } as T & { error?: string };
+    }
+  };
+
   const apiFetch = useCallback(
-    async <T,>(url: string, options: RequestInit = {}, overrideToken?: string): Promise<T> => {
+    async <T,>(
+      url: string,
+      options: RequestInit = {},
+      overrideToken?: string
+    ): Promise<T> => {
       const execute = async (bearerToken: string | null) => {
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -210,14 +228,19 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ role: user.role }),
         });
         if (refreshRes.ok) {
-          const refreshed = await refreshRes.json();
-          setToken(refreshed.token);
-          setUser(refreshed.user);
-          res = await execute(refreshed.token);
+          const refreshed = await parseJsonSafe<{
+            token?: string;
+            user?: UserAccount;
+          }>(refreshRes);
+          if (refreshed.token && refreshed.user) {
+            setToken(refreshed.token);
+            setUser(refreshed.user);
+            res = await execute(refreshed.token);
+          }
         }
       }
 
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe<T>(res);
       if (!res.ok) {
         throw new Error(data.error || `Lỗi máy chủ (${res.status})`);
       }
@@ -226,18 +249,22 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
     [user, loggedOutManually, setToken]
   );
 
+  const applyDataset = useCallback((data: AppDataset) => {
+    setDataset(data);
+    setGlobalFilters((prev) => ({
+      ...prev,
+      schoolYear: data.settings.currentSchoolYear,
+      semester: data.settings.currentSemester,
+      week: data.settings.currentWeek,
+    }));
+  }, []);
+
   const loadDatasetWithToken = useCallback(
     async (authToken: string) => {
       const data = await apiFetch<AppDataset>('/api/bootstrap', {}, authToken);
-      setDataset(data);
-      setGlobalFilters((prev) => ({
-        ...prev,
-        schoolYear: data.settings.currentSchoolYear,
-        semester: data.settings.currentSemester,
-        week: data.settings.currentWeek,
-      }));
+      applyDataset(data);
     },
-    [apiFetch]
+    [apiFetch, applyDataset]
   );
 
   const switchDemoRole = useCallback(
@@ -250,22 +277,36 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Không thể khởi tạo phiên');
+        const data = await parseJsonSafe<{
+          token?: string;
+          user?: UserAccount;
+          dataset?: AppDataset;
+        }>(res);
+        if (!res.ok || !data.token || !data.user) {
+          throw new Error(
+            data.error || `Không thể khởi tạo phiên làm việc (HTTP ${res.status})`
+          );
+        }
         isDemoSessionRef.current = true;
         setToken(data.token);
         setUser(data.user);
         setLoggedOutManually(false);
-        await loadDatasetWithToken(data.token);
+        if (data.dataset) {
+          applyDataset(data.dataset);
+        } else {
+          await loadDatasetWithToken(data.token);
+        }
         const allowed = ROLE_ALLOWED_PAGES[data.user.role as UserRole];
-        setActivePageState((prev) => (allowed.includes(prev) ? prev : 'dashboard'));
+        setActivePageState((prev) =>
+          allowed.includes(prev) ? prev : 'dashboard'
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Lỗi kết nối hệ thống');
       } finally {
         setLoading(false);
       }
     },
-    [loadDatasetWithToken]
+    [applyDataset, loadDatasetWithToken, setToken]
   );
 
   useEffect(() => {
@@ -277,7 +318,10 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
   const setActivePage = useCallback(
     (page: PageId) => {
       if (user && !ROLE_ALLOWED_PAGES[user.role].includes(page)) {
-        notify('error', `Vai trò ${user.role} không có quyền truy cập trang này.`);
+        notify(
+          'error',
+          `Vai trò ${user.role} không có quyền truy cập trang này.`
+        );
         return;
       }
       setActivePageState(page);
@@ -287,7 +331,11 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithCredentials = useCallback(
     async (contact: string, password: string) => {
-      const data = await apiFetch<{ token: string; user: UserAccount }>(
+      const data = await apiFetch<{
+        token: string;
+        user: UserAccount;
+        dataset?: AppDataset;
+      }>(
         '/api/auth/login',
         {
           method: 'POST',
@@ -299,11 +347,15 @@ export function ClassbookProvider({ children }: { children: React.ReactNode }) {
       setToken(data.token);
       setUser(data.user);
       setLoggedOutManually(false);
-      await loadDatasetWithToken(data.token);
+      if (data.dataset) {
+        applyDataset(data.dataset);
+      } else {
+        await loadDatasetWithToken(data.token);
+      }
       setActivePageState('dashboard');
       notify('success', `Đăng nhập thành công: ${data.user.fullName}`);
     },
-    [apiFetch, loadDatasetWithToken, notify]
+    [apiFetch, applyDataset, loadDatasetWithToken, notify, setToken]
   );
 
   const logout = useCallback(() => {

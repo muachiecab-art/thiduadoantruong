@@ -1,4 +1,4 @@
-import {
+import type {
   ClassLesson,
   ClassRankingRow,
   CriteriaScores,
@@ -9,7 +9,7 @@ import {
   ScoringRules,
   SmartAlert,
   TimetableSlot,
-} from '../types/classbook';
+} from '../types/classbook.js';
 
 export const DEFAULT_SCORING_RULES: ScoringRules = {
   hocTapMax: 3,

@@ -11,7 +11,7 @@ import {
   ClassLesson,
   UserAccount,
   UserRole,
-} from '../src/types/classbook';
+} from '../src/types/classbook.js';
 import {
   classifyLesson,
   computeClassRankings,
@@ -21,14 +21,14 @@ import {
   formatPercent,
   formatScore,
   validateCriteriaScores,
-} from '../src/utils/scoring';
+} from '../src/utils/scoring.js';
 import {
   createInitialSeedStore,
   hashPassword,
   PersistedStore,
   StoredUserRecord,
   verifyPassword,
-} from './seedData';
+} from './seedData.js';
 
 dotenv.config();
 
@@ -187,7 +187,14 @@ function appendAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
 
 export function createApiApp() {
   const app = express();
-  app.use(express.json({ limit: '5mb' }));
+  const jsonParser = express.json({ limit: '5mb' });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.body !== undefined) {
+      next();
+      return;
+    }
+    jsonParser(req, res, next);
+  });
 
   // Auth routes
   app.post('/api/auth/demo-session', (req: Request, res: Response) => {
@@ -1088,6 +1095,14 @@ export function createApiApp() {
       }
     }
   );
+
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message =
+      err instanceof Error ? err.message : 'Lỗi xử lý yêu cầu trên máy chủ.';
+    if (!res.headersSent) {
+      res.status(500).json({ error: message });
+    }
+  });
 
   return app;
 }

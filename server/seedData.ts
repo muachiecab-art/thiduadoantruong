@@ -11,8 +11,8 @@ import {
   SubjectItem,
   TimetableSlot,
   UserAccount,
-} from '../src/types/classbook';
-import { classifyLesson, computeTotalScore } from '../src/utils/scoring';
+} from '../src/types/classbook.js';
+import { classifyLesson, computeTotalScore } from '../src/utils/scoring.js';
 
 export interface StoredUserRecord extends UserAccount {
   passwordHash: string;

@@ -42,8 +42,17 @@ const LOCAL_DATA_DIR = path.resolve(process.cwd(), '.data');
 const LOCAL_STORE_PATH = path.join(LOCAL_DATA_DIR, 'classbook-store.json');
 
 function getSupabaseCredentials() {
-  const url = (process.env.SUPABASE_URL || '').trim();
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const url = (
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    ''
+  ).trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ''
+  ).trim();
   if (!url || !key) return null;
   return { url, key };
 }
@@ -52,6 +61,31 @@ export function getStorageMode(): StorageMode {
   if (getSupabaseCredentials()) return 'supabase';
   if (IS_VERCEL) return 'unconfigured-serverless';
   return 'local-file';
+}
+
+export function getStorageDiagnostics() {
+  const hasSupabaseUrl = Boolean(
+    (
+      process.env.SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.VITE_SUPABASE_URL ||
+      ''
+    ).trim()
+  );
+  const hasServiceRoleKey = Boolean(
+    (
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SECRET_KEY ||
+      ''
+    ).trim()
+  );
+  return {
+    storageMode: getStorageMode(),
+    isServerless: IS_VERCEL,
+    hasSupabaseUrl,
+    hasServiceRoleKey,
+    hasSessionSecret: Boolean((process.env.SESSION_SECRET || '').trim()),
+  };
 }
 
 let cachedSupabase: SupabaseClient | null = null;

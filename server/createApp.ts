@@ -34,6 +34,7 @@ import {
   findUserByContact,
   findUserById,
   getPublicDataset,
+  getStorageDiagnostics,
   getStorageMode,
   importLessonRecords,
   insertLessonRecord,
@@ -181,9 +182,10 @@ export function createApiApp() {
   });
 
   app.get('/api/health', (_req: Request, res: Response) => {
+    const diag = getStorageDiagnostics();
     res.json({
       ok: true,
-      storageMode: getStorageMode(),
+      ...diag,
       timestamp: new Date().toISOString(),
     });
   });
